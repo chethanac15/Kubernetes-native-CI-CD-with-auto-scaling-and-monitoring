@@ -1,0 +1,237 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: enhanced-cicd-postgres
+    environment:
+      POSTGRES_DB: enhanced_cicd_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - enhanced-cicd-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: enhanced-cicd-redis
+    command: redis-server --appendonly yes --requirepass ""
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - enhanced-cicd-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # SonarQube for local development
+  sonarqube:
+    image: sonarqube:9.9-community
+    container_name: enhanced-cicd-sonarqube
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+      SONAR_JDBC_URL: jdbc:postgresql://postgres:5432/sonarqube
+      SONAR_JDBC_USERNAME: postgres
+      SONAR_JDBC_PASSWORD: password
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    ports:
+      - "9000:9000"
+    networks:
+      - enhanced-cicd-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/api/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Jenkins for local development
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    container_name: enhanced-cicd-jenkins
+    environment:
+      JENKINS_OPTS: --httpPort=8080
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:8080"
+    networks:
+      - enhanced-cicd-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/login"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Prometheus for local monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: enhanced-cicd-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - enhanced-cicd-network
+    restart: unless-stopped
+
+  # Grafana for local monitoring
+  grafana:
+    image: grafana/grafana:latest
+    container_name: enhanced-cicd-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    networks:
+      - enhanced-cicd-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Elasticsearch for logging
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: enhanced-cicd-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - enhanced-cicd-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Kibana for logging
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: enhanced-cicd-kibana
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    volumes:
+      - kibana_data:/usr/share/kibana/data
+    ports:
+      - "5601:5601"
+    networks:
+      - enhanced-cicd-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Filebeat for log collection
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.11.0
+    container_name: enhanced-cicd-filebeat
+    user: root
+    volumes:
+      - ./monitoring/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - enhanced-cicd-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ArgoCD for GitOps
+  argocd:
+    image: argoproj/argocd:latest
+    container_name: enhanced-cicd-argocd
+    command:
+      - argocd-server
+      - --insecure
+      - --disable-auth
+    ports:
+      - "8081:8080"
+    networks:
+      - enhanced-cicd-network
+    restart: unless-stopped
+
+  # Trivy for security scanning
+  trivy:
+    image: aquasec/trivy:latest
+    container_name: enhanced-cicd-trivy
+    command: server --listen 0.0.0.0:8080
+    ports:
+      - "8082:8080"
+    networks:
+      - enhanced-cicd-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  sonarqube_data:
+    driver: local
+  sonarqube_extensions:
+    driver: local
+  sonarqube_logs:
+    driver: local
+  jenkins_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  kibana_data:
+    driver: local
+
+networks:
+  enhanced-cicd-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

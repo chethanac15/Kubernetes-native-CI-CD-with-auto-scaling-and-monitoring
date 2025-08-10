@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: enhanced-cicd-app-service
+  labels:
+    app: enhanced-cicd-app
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/api/actuator/prometheus"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: metrics
+  selector:
+    app: enhanced-cicd-app
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enhanced-cicd-app-headless
+  labels:
+    app: enhanced-cicd-app
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: enhanced-cicd-app

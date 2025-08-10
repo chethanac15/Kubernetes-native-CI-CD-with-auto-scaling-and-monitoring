@@ -1,0 +1,65 @@
+spring:
+  profiles:
+    active: dev
+  
+  # Development Database Configuration
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  
+  # Development JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+  
+  # Development Redis Configuration (using embedded Redis for dev)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+  
+  # H2 Console for development
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+# Development Server Configuration
+server:
+  port: 8080
+
+# Development Logging
+logging:
+  level:
+    com.enhancedcicd: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: DEBUG
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# Development Application Configuration
+app:
+  features:
+    blue-green-deployment: false
+    auto-scaling: false
+    security-scanning: false
+    monitoring: true
+
+# Development Management Endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always

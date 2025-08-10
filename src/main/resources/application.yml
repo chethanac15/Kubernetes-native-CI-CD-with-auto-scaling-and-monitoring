@@ -1,0 +1,170 @@
+spring:
+  application:
+    name: enhanced-cicd-app
+  
+  profiles:
+    active: dev
+  
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:enhanced_cicd_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+  
+  # Security Configuration
+  security:
+    user:
+      name: ${ADMIN_USER:admin}
+      password: ${ADMIN_PASSWORD:admin123}
+  
+  # Jackson Configuration
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+# Server Configuration
+server:
+  port: ${APP_PORT:8080}
+  servlet:
+    context-path: /api
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+
+# Management Endpoints (Actuator)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,configprops,beans,threaddump,heapdump
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+    diskspace:
+      enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    com.enhancedcicd: ${LOG_LEVEL:INFO}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:WARN}
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${SQL_PARAM_LOG_LEVEL:WARN}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/application.log
+    max-size: 10MB
+    max-history: 30
+
+# Application Specific Configuration
+app:
+  name: Enhanced CI/CD Application
+  version: 1.0.0
+  description: Enhanced CI/CD project with multi-cloud support
+  
+  # Security Configuration
+  security:
+    jwt:
+      secret: ${JWT_SECRET:your-secret-key-here-make-it-long-and-secure}
+      expiration: ${JWT_EXPIRATION:86400000} # 24 hours
+      refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days
+  
+  # Cache Configuration
+  cache:
+    ttl: ${CACHE_TTL:3600} # 1 hour
+    max-size: ${CACHE_MAX_SIZE:1000}
+  
+  # Monitoring Configuration
+  monitoring:
+    enabled: true
+    metrics:
+      enabled: true
+    tracing:
+      enabled: true
+  
+  # Feature Flags
+  features:
+    blue-green-deployment: ${BLUE_GREEN_ENABLED:true}
+    auto-scaling: ${AUTO_SCALING_ENABLED:true}
+    security-scanning: ${SECURITY_SCANNING_ENABLED:true}
+    monitoring: ${MONITORING_ENABLED:true}
+
+# OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  info:
+    title: Enhanced CI/CD API
+    description: Enhanced CI/CD Application API Documentation
+    version: 1.0.0
+    contact:
+      name: DevOps Team
+      email: devops@company.com
